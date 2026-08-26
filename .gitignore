@@ -1,0 +1,7 @@
+.env
+uploads/projects/
+uploads/covers/
+uploads/profile/
+uploads/clients/
+vendor/
+setup.lock
