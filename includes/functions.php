@@ -169,7 +169,8 @@ function validateUpload(array $file, string $type = 'image'): array {
 function compressImage(string $path, int $quality = 82): void {
     $info = @getimagesize($path);
     if (!$info) return;
-    $src = match($info['mime']) {
+    $mime = $info['mime'];
+    $src = match($mime) {
         'image/jpeg' => @imagecreatefromjpeg($path),
         'image/png'  => @imagecreatefrompng($path),
         'image/webp' => @imagecreatefromwebp($path),
@@ -177,12 +178,39 @@ function compressImage(string $path, int $quality = 82): void {
     };
     if (!$src) return;
     $w = imagesx($src); $h = imagesy($src);
-    $out = imagecreatetruecolor($w, $h);
-    // White background (handles PNG transparency)
-    imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
-    imagecopy($out, $src, 0, 0, 0, 0, $w, $h);
-    imageinterlace($out, 1); // progressive JPEG
-    imagejpeg($out, $path, $quality);
+
+    // Detect real transparency in PNG/WEBP
+    $hasAlpha = false;
+    if ($mime === 'image/png' || $mime === 'image/webp') {
+        for ($x = 0; $x < $w && !$hasAlpha; $x += max(1, (int)($w / 20))) {
+            for ($y = 0; $y < $h && !$hasAlpha; $y += max(1, (int)($h / 20))) {
+                if ((imagecolorat($src, $x, $y) >> 24) & 0x7F) $hasAlpha = true;
+            }
+        }
+    }
+
+    if ($hasAlpha) {
+        // Keep as PNG to preserve transparency
+        $out = imagecreatetruecolor($w, $h);
+        imagealphablending($out, false);
+        imagesavealpha($out, true);
+        imagecopy($out, $src, 0, 0, 0, 0, $w, $h);
+        // Rename file to .png
+        $pngPath = preg_replace('/\.[^.]+$/', '.png', $path);
+        imagepng($out, $pngPath, 6); // 0-9, 6 = good compression
+        if ($pngPath !== $path) {
+            unlink($path);
+            rename($pngPath, $path); // keep original filename, just rewrite content
+        }
+    } else {
+        // No transparency — convert to progressive JPEG
+        $out = imagecreatetruecolor($w, $h);
+        imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
+        imagecopy($out, $src, 0, 0, 0, 0, $w, $h);
+        imageinterlace($out, 1);
+        imagejpeg($out, $path, $quality);
+    }
+
     imagedestroy($src);
     imagedestroy($out);
 }
@@ -195,7 +223,9 @@ function saveUpload(array $file, string $subdir): ?array {
     $dir = UPLOAD_PATH . $subdir . '/';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
 
-    $ext = $type === 'image' ? 'jpg' : $validation['ext'];
+    // Keep original extension for images (compressImage decides final format)
+    $origExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $ext = $type === 'image' ? ($origExt === 'png' ? 'png' : 'jpg') : $validation['ext'];
     $filename = uniqid('', true) . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
     $dest = $dir . $filename;
     if (!move_uploaded_file($file['tmp_name'], $dest)) return null;
