@@ -110,8 +110,8 @@ include __DIR__ . '/includes/header.php';
     <div class="hero-video-outer" id="heroVideo">
         <div class="hero-video-wrap">
             <img src="<?= BASE_URL ?>/side/cropped_circle_image.png" class="hero-video-poster" alt="" aria-hidden="true">
-            <video autoplay muted loop playsinline oncontextmenu="return false;" oncanplay="this.previousElementSibling.style.opacity='0'">
-                <source src="<?= BASE_URL ?>/dashvideo.mp4" type="video/mp4">
+            <video autoplay muted loop playsinline preload="auto" oncontextmenu="return false;" oncanplay="this.previousElementSibling.style.opacity='0'">
+                <source src="<?= BASE_URL ?>/dashvideo1.mp4" type="video/mp4">
             </video>
         </div>
     </div>
@@ -153,7 +153,7 @@ include __DIR__ . '/includes/header.php';
                 <a href="<?= BASE_URL ?>/project?slug=<?= e($p['slug']) ?>" class="pf-card-inner">
                     <div class="pf-card-img">
                         <?php if ($p['cover_image']): ?>
-                        <img src="<?= e(assetUrl($p['cover_image'])) ?>" alt="<?= e($p['title']) ?>" loading="lazy">
+                        <img src="<?= e(assetUrl($p['cover_image'])) ?>" alt="<?= e($p['title']) ?>" <?= $i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"' ?>>
                         <?php else: ?>
                         <div class="pf-card-img-placeholder"><i class="bi bi-image"></i></div>
                         <?php endif; ?>

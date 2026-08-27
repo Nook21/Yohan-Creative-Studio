@@ -131,7 +131,7 @@ include __DIR__ . '/includes/header.php';
         <tr>
             <td>
                 <?php if ($p['cover_image']): ?>
-                <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="table-thumb" alt="">
+                <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="table-thumb" alt="" loading="lazy">
                 <?php else: ?>
                 <div class="table-thumb-placeholder"><i class="bi bi-image"></i></div>
                 <?php endif; ?>
@@ -198,7 +198,7 @@ include __DIR__ . '/includes/header.php';
         <?php foreach ($projects as $p): ?>
         <div class="proj-mobile-card">
             <?php if ($p['cover_image']): ?>
-            <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="proj-mobile-thumb" alt="">
+            <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="proj-mobile-thumb" alt="" loading="lazy">
             <?php else: ?>
             <div class="proj-mobile-thumb proj-mobile-thumb--empty"><i class="bi bi-image"></i></div>
             <?php endif; ?>

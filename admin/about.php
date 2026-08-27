@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newImg = saveUpload($_FILES['profile_image'], 'profile');
         if ($newImg) {
             if ($profileImage) deleteFile($profileImage);
-            $profileImage = $newImg;
+            $profileImage = $newImg['path'];
         } else {
             flash('error', 'Light image upload failed.');
             header('Location: ' . BASE_URL . '/admin/about.php'); exit;
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newImgDark = saveUpload($_FILES['profile_image_dark'], 'profile');
         if ($newImgDark) {
             if ($profileImageDark) deleteFile($profileImageDark);
-            $profileImageDark = $newImgDark;
+            $profileImageDark = $newImgDark['path'];
         } else {
             flash('error', 'Dark image upload failed.');
             header('Location: ' . BASE_URL . '/admin/about.php'); exit;

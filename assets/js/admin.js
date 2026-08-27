@@ -108,9 +108,10 @@ if (coverInput && coverPreview) {
     });
 }
 
-// ── Upload zone drag-over styling ─────────────────────────
+// ── Upload zone drag-over styling (generic, skips mediaFilesInput which has its own handler) ──
 document.querySelectorAll('.upload-zone').forEach(zone => {
     const input = zone.querySelector('input[type=file]');
+    if (!input || input.id === 'mediaFilesInput') return; // project-edit handles its own
     zone.addEventListener('click', () => input?.click());
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));

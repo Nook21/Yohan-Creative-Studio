@@ -13,8 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
         db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$key, $val, $val]);
     }
     if (!empty($_FILES['favicon']['name'])) {
-        $path = saveUpload($_FILES['favicon'], 'profile');
-        if ($path) db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('favicon',?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$path, $path]);
+        $result = saveUpload($_FILES['favicon'], 'profile');
+        if ($result) db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('favicon',?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$result['path'], $result['path']]);
     }
     flash('success', 'Settings saved.');
     header('Location: ' . BASE_URL . '/admin/settings.php'); exit;

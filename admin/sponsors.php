@@ -6,11 +6,11 @@ $pageTitle = 'Sponsors';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sponsor'])) {
     verifyCsrf();
     if (!empty($_FILES['logo']['name'])) {
-        $logo = saveUpload($_FILES['logo'], 'sponsors');
-        if ($logo) {
+        $result = saveUpload($_FILES['logo'], 'sponsors');
+        if ($result) {
             $name = pathinfo($_FILES['logo']['name'], PATHINFO_FILENAME);
             $order = (int) db()->query('SELECT COALESCE(MAX(display_order),0)+1 FROM sponsors')->fetchColumn();
-            db()->prepare('INSERT INTO sponsors (name, logo, display_order, status) VALUES (?,?,?,?)')->execute([$name, $logo, $order, 'active']);
+            db()->prepare('INSERT INTO sponsors (name, logo, display_order, status) VALUES (?,?,?,?)')->execute([$name, $result['path'], $order, 'active']);
             flash('success', 'Sponsor image added.');
         } else {
             flash('error', 'Upload failed. Use JPG, PNG, WEBP or SVG.');
@@ -33,10 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sponsors_bulk']))
             'error'    => $_FILES['logos']['error'][$i],
             'size'     => $_FILES['logos']['size'][$i],
         ];
-        $logo = saveUpload($file, 'sponsors');
-        if ($logo) {
+        $result = saveUpload($file, 'sponsors');
+        if ($result) {
             $name = pathinfo($fname, PATHINFO_FILENAME);
-            db()->prepare('INSERT INTO sponsors (name, logo, display_order, status) VALUES (?,?,?,?)')->execute([$name, $logo, $order++, 'active']);
+            db()->prepare('INSERT INTO sponsors (name, logo, display_order, status) VALUES (?,?,?,?)')->execute([$name, $result['path'], $order++, 'active']);
             $added++;
         }
     }

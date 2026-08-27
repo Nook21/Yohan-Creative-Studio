@@ -30,7 +30,8 @@ if ($project) { $where .= ' AND m.project_id = ?'; $params[] = $project; }
 
 $total = db()->prepare("SELECT COUNT(*) FROM media m WHERE $where");
 $total->execute($params);
-$pg = paginate((int)$total->fetchColumn(), $perPage, $page);
+$totalCount = (int)$total->fetchColumn();
+$pg = paginate($totalCount, $perPage, $page);
 
 $st = db()->prepare("SELECT m.*, p.title AS project_title, p.slug AS project_slug
     FROM media m

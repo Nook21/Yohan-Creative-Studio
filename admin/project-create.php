@@ -34,8 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Cover image
     $coverPath = null;
     if (!empty($_FILES['cover_image']['name'])) {
-        $coverPath = saveUpload($_FILES['cover_image'], 'covers');
-        if (!$coverPath) $errors[] = 'Cover image upload failed. Check file type and size.';
+        $result = saveUpload($_FILES['cover_image'], 'covers');
+        if ($result) $coverPath = $result['path'];
+        else $errors[] = 'Cover image upload failed. Check file type and size.';
     }
 
     if (empty($errors)) {

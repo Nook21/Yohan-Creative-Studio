@@ -13,7 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_client'])) {
     $status = $_POST['status'] === 'active' ? 'active' : 'inactive';
     $logo   = null;
     if (!empty($_FILES['logo']['name'])) {
-        $logo = saveUpload($_FILES['logo'], 'clients');
+        $result = saveUpload($_FILES['logo'], 'clients');
+        if ($result) $logo = $result['path'];
     }
     if ($name) {
         db()->prepare('INSERT INTO clients (name, logo, description, testimonial, person_title, display_order, status) VALUES (?,?,?,?,?,?,?)')->execute([$name, $logo, $desc, $test ?: null, $ptitle ?: null, $order, $status]);
@@ -38,10 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_client'])) {
     $logo = $existing->fetchColumn();
 
     if (!empty($_FILES['logo']['name'])) {
-        $newLogo = saveUpload($_FILES['logo'], 'clients');
-        if ($newLogo) {
+        $result = saveUpload($_FILES['logo'], 'clients');
+        if ($result) {
             if ($logo) deleteFile($logo);
-            $logo = $newLogo;
+            $logo = $result['path'];
         }
     }
     if ($name) {

@@ -2,18 +2,36 @@
 require_once __DIR__ . '/includes/auth.php';
 $pageTitle = 'Dashboard';
 
-// Real stats from DB
+// Real stats from DB — 3 queries instead of 9
 $db = db();
+
+$projRow = $db->query(
+    'SELECT
+        COUNT(*) AS total,
+        SUM(status="published") AS published,
+        SUM(status="draft") AS draft,
+        SUM(featured=1 AND status="published") AS featured
+     FROM projects'
+)->fetch();
+
+$mediaRow = $db->query(
+    'SELECT
+        COUNT(*) AS total,
+        SUM(type="image") AS images,
+        SUM(type="video") AS videos
+     FROM media'
+)->fetch();
+
 $stats = [
-    'total_projects'     => $db->query('SELECT COUNT(*) FROM projects')->fetchColumn(),
-    'published_projects' => $db->query('SELECT COUNT(*) FROM projects WHERE status="published"')->fetchColumn(),
-    'draft_projects'     => $db->query('SELECT COUNT(*) FROM projects WHERE status="draft"')->fetchColumn(),
-    'featured_projects'  => $db->query('SELECT COUNT(*) FROM projects WHERE featured=1 AND status="published"')->fetchColumn(),
+    'total_projects'     => $projRow['total'],
+    'published_projects' => $projRow['published'],
+    'draft_projects'     => $projRow['draft'],
+    'featured_projects'  => $projRow['featured'],
     'categories'         => $db->query('SELECT COUNT(*) FROM categories')->fetchColumn(),
     'clients'            => $db->query('SELECT COUNT(*) FROM clients WHERE status="active"')->fetchColumn(),
-    'total_media'        => $db->query('SELECT COUNT(*) FROM media')->fetchColumn(),
-    'images'             => $db->query('SELECT COUNT(*) FROM media WHERE type="image"')->fetchColumn(),
-    'videos'             => $db->query('SELECT COUNT(*) FROM media WHERE type="video"')->fetchColumn(),
+    'total_media'        => $mediaRow['total'],
+    'images'             => $mediaRow['images'],
+    'videos'             => $mediaRow['videos'],
 ];
 
 // Recent projects
@@ -113,7 +131,7 @@ include __DIR__ . '/includes/header.php';
                 <tr>
                     <td>
                         <?php if ($p['cover_image']): ?>
-                        <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="table-thumb" alt="">
+                        <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="table-thumb" alt="" loading="lazy">
                         <?php else: ?>
                         <div class="table-thumb-placeholder"><i class="bi bi-image"></i></div>
                         <?php endif; ?>
@@ -145,7 +163,7 @@ include __DIR__ . '/includes/header.php';
                 <?php foreach ($recentProjects as $p): ?>
                 <div class="proj-mobile-card">
                     <?php if ($p['cover_image']): ?>
-                    <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="proj-mobile-thumb" alt="">
+                    <img src="<?= e(assetUrl($p['cover_image'])) ?>" class="proj-mobile-thumb" alt="" loading="lazy">
                     <?php else: ?>
                     <div class="proj-mobile-thumb proj-mobile-thumb--empty"><i class="bi bi-image"></i></div>
                     <?php endif; ?>

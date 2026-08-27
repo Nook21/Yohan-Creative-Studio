@@ -90,7 +90,7 @@ $videoMedia = array_values(array_filter($media, fn($m) => $m['type'] === 'video'
     <?php foreach ($imageMedia as $i => $img): ?>
     <div class="pin-item fade-up" style="transition-delay:<?= min($i * 0.07, 0.5) ?>s">
       <div class="pin-frame">
-        <img src="<?= e(assetUrl($img['file_path'])) ?>" alt="<?= e($img['alt_text'] ?: $project['title']) ?>" loading="lazy">
+        <img src="<?= e(assetUrl($img['file_path'])) ?>" alt="<?= e($img['alt_text'] ?: $project['title']) ?>" <?= $i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"' ?>>
         <div class="pin-overlay">
           <button class="pin-zoom" data-src="<?= e(assetUrl($img['file_path'])) ?>" data-alt="<?= e($img['alt_text'] ?: $project['title']) ?>" aria-label="View full size">
             <i class="bi bi-arrows-fullscreen"></i>

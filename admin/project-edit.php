@@ -39,10 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project'])) {
     // New cover image
     $coverPath = $project['cover_image'];
     if (!empty($_FILES['cover_image']['name'])) {
-        $newCover = saveUpload($_FILES['cover_image'], 'covers');
-        if ($newCover) {
+        $result = saveUpload($_FILES['cover_image'], 'covers');
+        if ($result) {
             if ($coverPath) deleteFile($coverPath);
-            $coverPath = $newCover;
+            $coverPath = $result['path'];
         } else {
             $errors[] = 'Cover image upload failed.';
         }
@@ -82,12 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_media'])) {
 
         $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         $type = in_array($ext, ALLOWED_VIDEO_EXTS) ? 'video' : 'image';
-        $path = saveUpload($file, 'projects');
-        if (!$path) continue;
+        $result = saveUpload($file, 'projects');
+        if (!$result) continue;
 
         $order++;
-        db()->prepare('INSERT INTO media (project_id, type, file_path, alt_text, display_order) VALUES (?,?,?,?,?)')
-            ->execute([$id, $type, $path, $project['title'], $order]);
+        db()->prepare('INSERT INTO media (project_id, type, file_path, alt_text, display_order, file_size) VALUES (?,?,?,?,?,?)')
+            ->execute([$id, $type, $result['path'], $project['title'], $order, $result['size']]);
         $uploaded++;
     }
 
@@ -221,7 +221,7 @@ include __DIR__ . '/includes/header.php';
             <div class="admin-card">
                 <div class="admin-card-header"><span class="admin-card-title">Cover Image</span></div>
                 <?php if ($project['cover_image']): ?>
-                <img id="coverPreview" src="<?= e(assetUrl($project['cover_image'])) ?>" class="cover-preview mb-2" alt="">
+                <img id="coverPreview" src="<?= e(assetUrl($project['cover_image'])) ?>" class="cover-preview mb-2" alt="" loading="lazy">
                 <div id="coverPlaceholder" class="cover-placeholder mb-2" style="display:none"><i class="bi bi-image"></i></div>
                 <?php else: ?>
                 <div id="coverPlaceholder" class="cover-placeholder mb-2"><i class="bi bi-image"></i></div>
@@ -291,34 +291,108 @@ include __DIR__ . '/includes/header.php';
             <p style="font-size:0.78rem;margin-top:0.25rem">JPG, PNG, WEBP, AVIF · MP4, MKV, MOV, AVI, WEBM and more — no size limit on videos</p>
             <input type="file" name="media_files[]" id="mediaFilesInput" multiple accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.webm,.mkv,.mov,.avi,.wmv,.m4v,.ogv,.flv,.3gp" style="display:none">
         </div>
-        <div id="uploadFileList" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem"></div>
+        <div id="uploadPreviewGrid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:0.6rem;margin-bottom:0.85rem"></div>
+        <div id="uploadFileCount" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem"></div>
         <button type="submit" name="upload_media" class="btn-admin-primary"><i class="bi bi-upload"></i> Upload Files</button>
     </form>
 </div>
 
+<style>
+#uploadPreviewGrid .up-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface2, #1a1a1a);
+    border: 1px solid var(--border);
+}
+#uploadPreviewGrid .up-thumb img,
+#uploadPreviewGrid .up-thumb video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+#uploadPreviewGrid .up-thumb-label {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    font-size: 0.62rem;
+    padding: 3px 5px;
+    background: rgba(0,0,0,0.55);
+    color: #ddd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#uploadPreviewGrid .up-thumb-video-icon {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    font-size: 1.6rem;
+    color: rgba(255,255,255,0.85);
+    pointer-events: none;
+}
+</style>
+
 <script>
-// Show selected file names
-const mediaInput = document.getElementById('mediaFilesInput');
-const fileList   = document.getElementById('uploadFileList');
-if (mediaInput && fileList) {
-    mediaInput.addEventListener('change', () => {
-        const names = Array.from(mediaInput.files).map(f => f.name).join(', ');
-        fileList.textContent = names ? 'Selected: ' + names : '';
+const mediaInput     = document.getElementById('mediaFilesInput');
+const previewGrid    = document.getElementById('uploadPreviewGrid');
+const uploadFileCount = document.getElementById('uploadFileCount');
+const uploadZone     = document.getElementById('uploadZone');
+
+function buildPreviews(files) {
+    previewGrid.innerHTML = '';
+    if (!files.length) {
+        previewGrid.style.display = 'none';
+        uploadFileCount.textContent = '';
+        return;
+    }
+    previewGrid.style.display = 'grid';
+    uploadFileCount.textContent = files.length + ' file' + (files.length > 1 ? 's' : '') + ' selected';
+
+    Array.from(files).forEach(file => {
+        const wrap = document.createElement('div');
+        wrap.className = 'up-thumb';
+
+        const isVideo = file.type.startsWith('video/');
+        const url = URL.createObjectURL(file);
+
+        if (isVideo) {
+            const vid = document.createElement('video');
+            vid.src = url;
+            vid.muted = true;
+            vid.preload = 'metadata';
+            vid.playsInline = true;
+            wrap.appendChild(vid);
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-play-circle-fill up-thumb-video-icon';
+            wrap.appendChild(icon);
+        } else {
+            const img = document.createElement('img');
+            img.src = url;
+            wrap.appendChild(img);
+        }
+
+        const label = document.createElement('div');
+        label.className = 'up-thumb-label';
+        label.textContent = file.name;
+        wrap.appendChild(label);
+
+        previewGrid.appendChild(wrap);
     });
 }
-// Upload zone click
-const uploadZone = document.getElementById('uploadZone');
+
+if (mediaInput) {
+    mediaInput.addEventListener('change', () => buildPreviews(mediaInput.files));
+}
 if (uploadZone && mediaInput) {
-    uploadZone.addEventListener('click', e => {
-        if (e.target !== mediaInput) mediaInput.click();
-    });
+    uploadZone.addEventListener('click', e => { if (e.target !== mediaInput) mediaInput.click(); });
     uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
     uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
     uploadZone.addEventListener('drop', e => {
         e.preventDefault();
         uploadZone.classList.remove('dragover');
         mediaInput.files = e.dataTransfer.files;
-        mediaInput.dispatchEvent(new Event('change'));
+        buildPreviews(e.dataTransfer.files);
     });
 }
 </script>

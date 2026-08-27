@@ -166,7 +166,28 @@ function validateUpload(array $file, string $type = 'image'): array {
     return ['ok' => true, 'ext' => $ext, 'mime' => $mime];
 }
 
-function saveUpload(array $file, string $subdir): ?string {
+function compressImage(string $path, int $quality = 82): void {
+    $info = @getimagesize($path);
+    if (!$info) return;
+    $src = match($info['mime']) {
+        'image/jpeg' => @imagecreatefromjpeg($path),
+        'image/png'  => @imagecreatefrompng($path),
+        'image/webp' => @imagecreatefromwebp($path),
+        default      => null
+    };
+    if (!$src) return;
+    $w = imagesx($src); $h = imagesy($src);
+    $out = imagecreatetruecolor($w, $h);
+    // White background (handles PNG transparency)
+    imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
+    imagecopy($out, $src, 0, 0, 0, 0, $w, $h);
+    imageinterlace($out, 1); // progressive JPEG
+    imagejpeg($out, $path, $quality);
+    imagedestroy($src);
+    imagedestroy($out);
+}
+
+function saveUpload(array $file, string $subdir): ?array {
     $type = in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ALLOWED_VIDEO_EXTS) ? 'video' : 'image';
     $validation = validateUpload($file, $type);
     if (!$validation['ok']) return null;
@@ -174,10 +195,14 @@ function saveUpload(array $file, string $subdir): ?string {
     $dir = UPLOAD_PATH . $subdir . '/';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
 
-    $filename = uniqid('', true) . '_' . bin2hex(random_bytes(4)) . '.' . $validation['ext'];
+    $ext = $type === 'image' ? 'jpg' : $validation['ext'];
+    $filename = uniqid('', true) . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
     $dest = $dir . $filename;
     if (!move_uploaded_file($file['tmp_name'], $dest)) return null;
-    return 'uploads/' . $subdir . '/' . $filename;
+
+    if ($type === 'image') compressImage($dest);
+
+    return ['path' => 'uploads/' . $subdir . '/' . $filename, 'size' => filesize($dest)];
 }
 
 function deleteFile(string $relativePath): void {
