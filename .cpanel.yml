@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/akiyacsx/yohancreatives.com/
+    - /bin/cp -R . $DEPLOYPATH
