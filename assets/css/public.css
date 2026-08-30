@@ -272,7 +272,7 @@ ul, ol { list-style: none; }
   .nav-logo-img { height: 36px; width: 36px; max-width: 36px; }
 }
 @media (max-width: 480px) {
-  .nav-logo-img { height: 30px; width: 30px; max-width: 30px; }
+  .nav-logo-img { height: 38px; width: 38px; max-width: 38px; }
 }
 @keyframes logoBreath {
   0%, 100% {
