@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/functions.php';
-$siteTitle = getSetting('site_title', 'Amanuel Yohannes');
-$favicon   = getSetting('favicon');
+$siteTitle  = getSetting('site_title', 'Amanuel Yohannes');
+$siteLogo   = getSetting('site_logo');
+$favicon    = getSetting('favicon');
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 <!DOCTYPE html>
@@ -31,8 +32,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <nav class="site-nav" id="siteNav">
     <div class="nav-inner">
         <a href="<?= BASE_URL ?>/" class="nav-logo">
+            <?php if ($siteLogo): ?>
+            <img src="<?= e(assetUrl($siteLogo)) ?>" alt="<?= e($siteTitle) ?>" class="nav-logo-img">
+            <?php else: ?>
             <span class="logo-name"><?= e(getSetting('site_title', 'Amanuel Yohannes')) ?><span class="logo-name-mark"></span></span>
             <span class="logo-title"><?= e(getSetting('designer_title', 'Graphic Designer')) ?></span>
+            <?php endif; ?>
         </a>
         <div class="nav-mobile-controls">
             <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">

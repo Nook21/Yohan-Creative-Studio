@@ -65,56 +65,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sent = false;
         $mailError = '';
 
-        if ($toEmail) {
-            if ($smtpEnabled) {
-                // ── PHPMailer via SMTP ────────────────────────────
-                try {
-                    $mail = new PHPMailer(true);
-                    $mail->isSMTP();
-                    $mail->Host       = getSetting('smtp_host');
-                    $mail->SMTPAuth   = true;
-                    $mail->Username   = getSetting('smtp_username');
-                    $mail->Password   = getSetting('smtp_password');
-                    $enc = getSetting('smtp_encryption', 'tls');
-                    $mail->SMTPSecure = $enc === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : ($enc === 'tls' ? PHPMailer::ENCRYPTION_STARTTLS : '');
-                    $mail->Port       = (int) getSetting('smtp_port', '587');
-                    $mail->CharSet    = 'UTF-8';
-
-                    $mail->setFrom($fromEmail, $fromName);
-                    $mail->addAddress($toEmail);
-                    $mail->addReplyTo($formData['email'], $formData['name']);
-
-                    $mail->isHTML(true);
-                    $mail->Subject = $subject;
-                    $mail->Body    = $htmlBody;
-                    $mail->AltBody = $plainBody;
-
-                    $mail->send();
-                    $sent = true;
-                } catch (Exception $e) {
-                    $mailError = $e->getMessage();
-                    $sent = false;
-                }
-            } else {
-                // ── Fallback: PHP mail() ──────────────────────────
-                $headers  = "MIME-Version: 1.0\r\n";
-                $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-                $headers .= "From: {$fromName} <{$fromEmail}>\r\n";
-                $headers .= "Reply-To: {$formData['email']}\r\n";
-                $sent = mail($toEmail, $subject, $plainBody, $headers);
+        if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'No valid receiving email configured. Set it in Admin → Settings → Email & SMTP.';
+        } elseif ($smtpEnabled) {
+            // ── PHPMailer via SMTP ──
+            try {
+                $mail = new PHPMailer(true);
+                $mail->isSMTP();
+                $mail->Host       = getSetting('smtp_host');
+                $mail->SMTPAuth   = true;
+                $mail->Username   = getSetting('smtp_username');
+                $mail->Password   = getSetting('smtp_password');
+                $enc = getSetting('smtp_encryption', 'tls');
+                $mail->SMTPSecure = $enc === 'ssl' ? PHPMailer::ENCRYPTION_SMTPS : ($enc === 'tls' ? PHPMailer::ENCRYPTION_STARTTLS : '');
+                $mail->Port       = (int) getSetting('smtp_port', '587');
+                $mail->CharSet    = 'UTF-8';
+                $mail->setFrom($fromEmail, $fromName);
+                $mail->addAddress($toEmail);
+                $mail->addReplyTo($formData['email'], $formData['name']);
+                $mail->isHTML(true);
+                $mail->Subject = $subject;
+                $mail->Body    = $htmlBody;
+                $mail->AltBody = $plainBody;
+                $mail->send();
+                $sent = true;
+            } catch (Exception $e) {
+                $mailError = $e->getMessage();
+                error_log('Contact SMTP error: ' . $mailError);
+                $errors[] = 'Could not send your message. Please try again or email directly. (Error: ' . $mailError . ')';
             }
         } else {
-            // No receiving email configured — still show success to visitor
-            $sent = true;
+            // ── Fallback: PHP mail() ──
+            $headers  = "MIME-Version: 1.0\r\n";
+            $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $headers .= "From: {$fromName} <{$fromEmail}>\r\n";
+            $headers .= "Reply-To: {$formData['email']}\r\n";
+            $sent = @mail($toEmail, $subject, $plainBody, $headers);
+            if (!$sent) $errors[] = 'PHP mail() failed. Please configure SMTP in Admin → Settings.';
         }
 
         if ($sent) {
             $success  = true;
             $formData = ['name' => '', 'email' => '', 'subject' => '', 'message' => ''];
-        } else {
-            $errors[] = 'Sorry, your message could not be sent. Please try again or contact directly by email.';
-            // Log error for admin (silent to visitor)
-            error_log('Contact form mail error: ' . $mailError);
         }
     }
 }

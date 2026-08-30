@@ -2,22 +2,63 @@
 require_once __DIR__ . '/includes/auth.php';
 $pageTitle = 'Settings';
 
-// ── Site settings ─────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
+// ── General settings ──────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_general'])) {
     verifyCsrf();
-    $keys = ['site_title','site_description','designer_title','contact_email','contact_phone','contact_location','contact_location_url',
-             'social_instagram','social_linkedin','social_behance','social_twitter',
-             'social_telegram','social_facebook','social_tiktok','social_youtube','copyright_text'];
-    foreach ($keys as $key) {
+    foreach (['site_title','designer_title','site_description','copyright_text'] as $key) {
         $val = trim($_POST[$key] ?? '');
         db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$key, $val, $val]);
     }
+    // Favicon
     if (!empty($_FILES['favicon']['name'])) {
         $result = saveUpload($_FILES['favicon'], 'profile');
         if ($result) db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('favicon',?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$result['path'], $result['path']]);
     }
-    flash('success', 'Settings saved.');
+    // Site logo
+    if (!empty($_POST['site_logo_cropped'])) {
+        $dataUrl = $_POST['site_logo_cropped'];
+        if (preg_match('/^data:image\/(png|jpeg|webp);base64,/', $dataUrl, $m)) {
+            $ext     = $m[1] === 'jpeg' ? 'jpg' : $m[1];
+            $imgData = base64_decode(preg_replace('/^data:image\/[a-z]+;base64,/', '', $dataUrl));
+            $dir     = UPLOAD_PATH . 'profile/';
+            if (!is_dir($dir)) mkdir($dir, 0755, true);
+            $filename = uniqid('logo_', true) . '.' . $ext;
+            file_put_contents($dir . $filename, $imgData);
+            $logoPath = 'uploads/profile/' . $filename;
+            $old = db()->query("SELECT setting_value FROM settings WHERE setting_key='site_logo'")->fetchColumn();
+            if ($old) deleteFile($old);
+            db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('site_logo',?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$logoPath, $logoPath]);
+        }
+    }
+    if (!empty($_POST['remove_site_logo'])) {
+        $old = db()->query("SELECT setting_value FROM settings WHERE setting_key='site_logo'")->fetchColumn();
+        if ($old) deleteFile($old);
+        db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES ('site_logo','') ON DUPLICATE KEY UPDATE setting_value=''")->execute([]);
+    }
+    flash('success', 'General settings saved.');
     header('Location: ' . BASE_URL . '/admin/settings.php'); exit;
+}
+
+// ── Contact Info settings ──────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_contact'])) {
+    verifyCsrf();
+    foreach (['contact_phone','contact_location','contact_location_url'] as $key) {
+        $val = trim($_POST[$key] ?? '');
+        db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$key, $val, $val]);
+    }
+    flash('success', 'Contact info saved.');
+    header('Location: ' . BASE_URL . '/admin/settings.php#contact'); exit;
+}
+
+// ── Social Links settings ──────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_social'])) {
+    verifyCsrf();
+    foreach (['social_instagram','social_linkedin','social_behance','social_twitter','social_telegram','social_facebook','social_tiktok','social_youtube'] as $key) {
+        $val = trim($_POST[$key] ?? '');
+        db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?")->execute([$key, $val, $val]);
+    }
+    flash('success', 'Social links saved.');
+    header('Location: ' . BASE_URL . '/admin/settings.php#social'); exit;
 }
 
 // ── SMTP settings ─────────────────────────────────────────
@@ -80,6 +121,9 @@ $s = getAllSettings();
 $currentUser = db()->prepare('SELECT name, email FROM users WHERE id = ?');
 $currentUser->execute([$_SESSION['admin_id']]);
 $currentUser = $currentUser->fetch();
+$siteLogo = $s['site_logo'] ?? '';
+
+$extraHead = '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">';
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -88,56 +132,94 @@ include __DIR__ . '/includes/header.php';
 
 <div class="page-header"><h2>Site Settings</h2></div>
 
-<!-- ── Site Settings ──────────────────────────────────────── -->
-<form method="POST" enctype="multipart/form-data">
-    <?= csrfField() ?>
-    <div class="row g-3">
-        <div class="col-lg-8">
-            <div class="admin-card mb-3">
+<!-- ── General ───────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <form method="POST" enctype="multipart/form-data">
+        <?= csrfField() ?>
+        <div class="admin-card">
                 <div class="admin-card-header"><span class="admin-card-title">General</span></div>
                 <div class="mb-3"><label class="form-label">Site Title <span class="form-text d-inline">(your name / studio name — used in nav &amp; footer)</span></label><input type="text" name="site_title" class="form-control" value="<?= e($s['site_title'] ?? '') ?>"></div>
                 <div class="mb-3"><label class="form-label">Designer Title <span class="form-text d-inline">(e.g. Graphic Designer — shown under name in nav, footer &amp; hero)</span></label><input type="text" name="designer_title" class="form-control" value="<?= e($s['designer_title'] ?? 'Graphic Designer') ?>"></div>
+
+                <!-- ── Site Logo ── -->
+                <div class="mb-3">
+                    <label class="form-label">Site Logo <span class="form-text d-inline">(replaces the text name in the nav header)</span></label>
+                    <?php if ($siteLogo): ?>
+                    <div class="logo-current-wrap mb-2" style="display:flex;align-items:center;gap:1rem;padding:0.75rem 1rem;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+                        <img src="<?= e(assetUrl($siteLogo)) ?>" style="height:40px;max-width:180px;object-fit:contain" alt="Current logo">
+                        <div style="flex:1;font-size:0.78rem;color:var(--text-muted)">Current logo</div>
+                        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;color:var(--text-muted);cursor:pointer">
+                            <input type="checkbox" name="remove_site_logo" value="1" class="form-check-input" style="margin:0"> Remove
+                        </label>
+                    </div>
+                    <?php endif; ?>
+                    <input type="file" id="logoFileInput" class="form-control" accept="image/*" style="margin-bottom:0.5rem">
+                    <input type="hidden" name="site_logo_cropped" id="siteLogoCropped">
+                    <div class="form-text">PNG, SVG, JPG, WEBP — any size. You can crop after selecting.</div>
+                    <!-- Crop preview strip -->
+                    <div id="logoCropPreviewWrap" style="display:none;margin-top:0.75rem;padding:0.75rem;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">Cropped preview:</div>
+                        <img id="logoCropPreview" src="" style="max-height:60px;max-width:240px;object-fit:contain;display:block" alt="">
+                        <button type="button" id="reopenCropBtn" class="btn-admin-secondary" style="margin-top:0.5rem;padding:0.3rem 0.75rem;font-size:0.78rem"><i class="bi bi-crop"></i> Re-crop</button>
+                    </div>
+                </div>
+
                 <div class="mb-3"><label class="form-label">Site Description</label><textarea name="site_description" class="form-control" rows="3"><?= e($s['site_description'] ?? '') ?></textarea></div>
                 <div class="mb-3"><label class="form-label">Copyright Text</label><input type="text" name="copyright_text" class="form-control" value="<?= e($s['copyright_text'] ?? '') ?>"></div>
+                <div class="mt-3 mb-1"><button type="submit" name="save_general" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Save General</button></div>
             </div>
-            <div class="admin-card mb-3">
-                <div class="admin-card-header"><span class="admin-card-title">Contact Info</span></div>
-                <div class="mb-3"><label class="form-label">Phone</label><input type="text" name="contact_phone" class="form-control" value="<?= e($s['contact_phone'] ?? '') ?>"></div>
-                <div class="mb-3">
-                    <label class="form-label">Location <span class="form-text d-inline">(display text)</span></label>
-                    <input type="text" name="contact_location" class="form-control" value="<?= e($s['contact_location'] ?? '') ?>" placeholder="e.g. Addis Ababa, Ethiopia">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Google Maps URL</label>
-                    <input type="url" name="contact_location_url" class="form-control" value="<?= e($s['contact_location_url'] ?? '') ?>" placeholder="https://maps.google.com/?q=...">
-                    <div class="form-text">Open <a href="https://maps.google.com" target="_blank">Google Maps</a>, search your location, click <strong>Share → Copy link</strong>, paste here.</div>
-                </div>
-            </div>
-            <div class="admin-card">
-                <div class="admin-card-header"><span class="admin-card-title">Social Links</span></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-instagram me-1"></i>Instagram URL</label><input type="url" name="social_instagram" class="form-control" value="<?= e($s['social_instagram'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-linkedin me-1"></i>LinkedIn URL</label><input type="url" name="social_linkedin" class="form-control" value="<?= e($s['social_linkedin'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-behance me-1"></i>Behance URL</label><input type="url" name="social_behance" class="form-control" value="<?= e($s['social_behance'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-twitter-x me-1"></i>Twitter/X URL</label><input type="url" name="social_twitter" class="form-control" value="<?= e($s['social_twitter'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-telegram me-1"></i>Telegram URL</label><input type="url" name="social_telegram" class="form-control" value="<?= e($s['social_telegram'] ?? '') ?>" placeholder="https://t.me/username"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-facebook me-1"></i>Facebook URL</label><input type="url" name="social_facebook" class="form-control" value="<?= e($s['social_facebook'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-tiktok me-1"></i>TikTok URL</label><input type="url" name="social_tiktok" class="form-control" value="<?= e($s['social_tiktok'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label"><i class="bi bi-youtube me-1"></i>YouTube URL</label><input type="url" name="social_youtube" class="form-control" value="<?= e($s['social_youtube'] ?? '') ?>"></div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="admin-card">
+        </form>
+    </div>
+    <div class="col-lg-4">
+        <form method="POST" enctype="multipart/form-data">
+        <?= csrfField() ?>
+        <div class="admin-card">
                 <div class="admin-card-header"><span class="admin-card-title">Favicon</span></div>
                 <?php if (!empty($s['favicon'])): ?>
                 <img src="<?= e(assetUrl($s['favicon'])) ?>" style="width:48px;height:48px;object-fit:contain;margin-bottom:0.75rem;display:block" alt="">
                 <?php endif; ?>
                 <input type="file" name="favicon" class="form-control" accept=".jpg,.jpeg,.png,.webp">
                 <div class="form-text mt-1">PNG recommended</div>
+                <div class="mt-3 mb-1"><button type="submit" name="save_general" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Save Favicon</button></div>
             </div>
-        </div>
+        </form>
     </div>
-    <div class="mt-3 mb-5">
-        <button type="submit" name="save_settings" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Save Settings</button>
+</div>
+
+<!-- ── Contact Info ─────────────────────────────────────────── -->
+<form method="POST" id="contact">
+    <?= csrfField() ?>
+    <div class="admin-card mb-4">
+        <div class="admin-card-header"><span class="admin-card-title">Contact Info</span></div>
+        <div class="mb-3"><label class="form-label">Phone</label><input type="text" name="contact_phone" class="form-control" value="<?= e($s['contact_phone'] ?? '') ?>"></div>
+        <div class="mb-3">
+            <label class="form-label">Location <span class="form-text d-inline">(display text)</span></label>
+            <input type="text" name="contact_location" class="form-control" value="<?= e($s['contact_location'] ?? '') ?>" placeholder="e.g. Addis Ababa, Ethiopia">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Google Maps URL</label>
+            <input type="url" name="contact_location_url" class="form-control" value="<?= e($s['contact_location_url'] ?? '') ?>" placeholder="https://maps.google.com/?q=...">
+            <div class="form-text">Open <a href="https://maps.google.com" target="_blank">Google Maps</a>, search your location, click <strong>Share &rarr; Copy link</strong>, paste here.</div>
+        </div>
+        <div class="mt-3 mb-1"><button type="submit" name="save_contact" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Save Contact Info</button></div>
+    </div>
+</form>
+
+<!-- ── Social Links ──────────────────────────────────────────── -->
+<form method="POST" id="social">
+    <?= csrfField() ?>
+    <div class="admin-card mb-4">
+        <div class="admin-card-header"><span class="admin-card-title">Social Links</span></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-instagram me-1"></i>Instagram URL</label><input type="url" name="social_instagram" class="form-control" value="<?= e($s['social_instagram'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-linkedin me-1"></i>LinkedIn URL</label><input type="url" name="social_linkedin" class="form-control" value="<?= e($s['social_linkedin'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-behance me-1"></i>Behance URL</label><input type="url" name="social_behance" class="form-control" value="<?= e($s['social_behance'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-twitter-x me-1"></i>Twitter/X URL</label><input type="url" name="social_twitter" class="form-control" value="<?= e($s['social_twitter'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-telegram me-1"></i>Telegram URL</label><input type="url" name="social_telegram" class="form-control" value="<?= e($s['social_telegram'] ?? '') ?>" placeholder="https://t.me/username"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-facebook me-1"></i>Facebook URL</label><input type="url" name="social_facebook" class="form-control" value="<?= e($s['social_facebook'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-tiktok me-1"></i>TikTok URL</label><input type="url" name="social_tiktok" class="form-control" value="<?= e($s['social_tiktok'] ?? '') ?>"></div>
+        <div class="mb-3"><label class="form-label"><i class="bi bi-youtube me-1"></i>YouTube URL</label><input type="url" name="social_youtube" class="form-control" value="<?= e($s['social_youtube'] ?? '') ?>"></div>
+        <div class="mt-3 mb-1"><button type="submit" name="save_social" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Save Social Links</button></div>
     </div>
 </form>
 
@@ -283,5 +365,82 @@ include __DIR__ . '/includes/header.php';
         </button>
     </form>
 </div>
+
+<!-- Crop Modal -->
+<div id="cropModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;flex-direction:column">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;max-width:92vw;width:700px;max-height:90vh;display:flex;flex-direction:column;gap:1rem">
+        <span style="font-size:0.9rem;font-weight:600">Crop Logo</span>
+        <div style="overflow:auto;max-height:60vh;background:#111;border-radius:6px;display:flex;align-items:center;justify-content:center">
+            <img id="cropperImg" src="" style="max-width:100%;display:block">
+        </div>
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;flex-wrap:wrap">
+            <button type="button" id="cropCancelBtn" class="btn-admin-secondary">Cancel</button>
+            <button type="button" id="cropSkipBtn" class="btn-admin-secondary"><i class="bi bi-skip-forward"></i> Use original</button>
+            <button type="button" id="cropConfirmBtn" class="btn-admin-primary"><i class="bi bi-check-lg"></i> Apply crop</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<script>
+(function(){
+    const fileInput   = document.getElementById('logoFileInput');
+    const hiddenInput = document.getElementById('siteLogoCropped');
+    const previewWrap = document.getElementById('logoCropPreviewWrap');
+    const previewImg  = document.getElementById('logoCropPreview');
+    const reopenBtn   = document.getElementById('reopenCropBtn');
+    const modal       = document.getElementById('cropModal');
+    const cropperImg  = document.getElementById('cropperImg');
+    const confirmBtn  = document.getElementById('cropConfirmBtn');
+    const cancelBtn   = document.getElementById('cropCancelBtn');
+    const skipBtn     = document.getElementById('cropSkipBtn');
+    let cropper = null, originalDataUrl = null;
+
+    function openModal(src) {
+        cropperImg.src = src;
+        modal.style.display = 'flex';
+        if (cropper) { cropper.destroy(); cropper = null; }
+        setTimeout(() => {
+            cropper = new Cropper(cropperImg, {
+                viewMode: 1, autoCropArea: 1,
+                movable: true, zoomable: true,
+                rotatable: false, scalable: false, background: false
+            });
+        }, 100);
+    }
+    function closeModal() {
+        modal.style.display = 'none';
+        if (cropper) { cropper.destroy(); cropper = null; }
+    }
+
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => { originalDataUrl = e.target.result; openModal(originalDataUrl); };
+        reader.readAsDataURL(file);
+    });
+    confirmBtn.addEventListener('click', function() {
+        if (!cropper) return;
+        const dataUrl = cropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 600, imageSmoothingQuality: 'high' }).toDataURL('image/png');
+        hiddenInput.value = dataUrl;
+        previewImg.src = dataUrl;
+        previewWrap.style.display = 'block';
+        closeModal();
+    });
+    skipBtn.addEventListener('click', function() {
+        hiddenInput.value = originalDataUrl;
+        previewImg.src = originalDataUrl;
+        previewWrap.style.display = 'block';
+        closeModal();
+    });
+    cancelBtn.addEventListener('click', function() {
+        fileInput.value = ''; hiddenInput.value = '';
+        previewWrap.style.display = 'none';
+        closeModal();
+    });
+    if (reopenBtn) reopenBtn.addEventListener('click', () => { if (originalDataUrl) openModal(originalDataUrl); });
+})();
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>

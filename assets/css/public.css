@@ -257,6 +257,26 @@ ul, ol { list-style: none; }
   gap: 0;
   line-height: 1;
 }
+.nav-logo-img {
+  height: 45px;
+  max-width: 200px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 50%;
+  animation: logoBreath 3.5s ease-in-out infinite;
+  will-change: transform, box-shadow;
+}
+@keyframes logoBreath {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0px 0px rgba(160,120,255,0), 0 0 0px 0px rgba(100,180,255,0);
+  }
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 12px 4px rgba(160,120,255,0.55), 0 0 28px 8px rgba(100,180,255,0.3);
+  }
+}
 .logo-name {
   font-family: var(--font-serif);
   font-size: 1.15rem;
