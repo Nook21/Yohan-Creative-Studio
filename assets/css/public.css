@@ -259,13 +259,20 @@ ul, ol { list-style: none; }
 }
 .nav-logo-img {
   height: 45px;
-  max-width: 200px;
-  width: auto;
-  object-fit: contain;
+  width: 45px;
+  max-width: 45px;
+  object-fit: cover;
   display: block;
   border-radius: 50%;
+  flex-shrink: 0;
   animation: logoBreath 3.5s ease-in-out infinite;
   will-change: transform, box-shadow;
+}
+@media (max-width: 768px) {
+  .nav-logo-img { height: 36px; width: 36px; max-width: 36px; }
+}
+@media (max-width: 480px) {
+  .nav-logo-img { height: 30px; width: 30px; max-width: 30px; }
 }
 @keyframes logoBreath {
   0%, 100% {
